@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2400" viewBox="0 0 1800 2400">
+<rect width="1800" height="2400" fill="#fff7eb"/>
+<circle cx="40" cy="70" r="430" fill="#e3dcff"/><circle cx="1760" cy="2310" r="480" fill="#fbd9ca"/>
+<circle cx="1610" cy="370" r="110" fill="#ffda87"/><circle cx="200" cy="1950" r="80" fill="#cce4da"/>
+<path d="M160 680l35 65 72 12-52 50 10 72-65-35-65 35 10-72-52-50 72-12z" fill="#ffda87"/>
+<text x="900" y="230" text-anchor="middle" font-family="sans-serif" font-size="74" fill="#363054">ПРИГЛАШЕНИЕ</text>
+<text x="900" y="350" text-anchor="middle" font-family="sans-serif" font-size="48" fill="#726986">на чудесный праздник!</text>
+<circle cx="900" cy="910" r="466" fill="#fff"/>
+<text x="900" y="1730" text-anchor="middle" font-family="sans-serif" font-size="46" fill="#726986">Ждём вас</text>
+<text x="900" y="2210" text-anchor="middle" font-family="sans-serif" font-size="48" fill="#726986">Будет весело. Приходите!</text>
+</svg>

@@ -1,0 +1,13 @@
+<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'none'">
+<title>Приглашения</title><link rel="stylesheet" href="style.css"></head><body>
+<header><span class="brand">✦ Приглашения</span><span>Всё остаётся на вашем компьютере</span></header>
+<main><section class="editor"><div class="eyebrow">ВАШ МАЛЕНЬКИЙ ПРАЗДНИК</div><h1>Приглашение<br>за пару минут</h1><p>Добавьте фотографию и детали события — остальное мы сделаем сами.</p>
+<form id="form"><label>Шаблон приглашения<input id="template" type="file" accept="image/png,image/jpeg"><small>Выберите присланный пустой шаблон один раз. Он сохранится на этом компьютере.</small></label><label>Фотография ребёнка<input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPG или WebP · до 25 МБ</small></label>
+<label>Имя ребёнка<input id="name" maxlength="80" placeholder="Например, София" required></label>
+<div class="row"><label>Дата<input id="date" type="date" required></label><label>Время<input id="time" type="time" required></label></div>
+<label>Место проведения<select id="venue" required aria-describedby="venue-note"></select><small id="venue-note">Адрес появится слева внизу приглашения.</small></label>
+<label>Формат изображения<select id="format"><option value="png">PNG — максимальное качество</option><option value="jpg">JPG — меньший размер файла</option></select></label>
+<button id="save" disabled>Сформировать приглашение</button><div id="status" role="status" aria-live="polite">Загружаем шаблон…</div></form>
+</section><section class="preview"><div class="preview-heading"><strong>Предварительный просмотр</strong><span id="resolution"></span></div><canvas id="canvas" aria-label="Предварительный просмотр приглашения"></canvas><p>Сохраняется в полном разрешении шаблона</p></section></main>
+<script src="render.js"></script><script src="app.js"></script></body></html>
