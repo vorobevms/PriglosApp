@@ -1,6 +1,6 @@
 {
   "name": "priglos-app",
-  "version": "1.0.0",
+  "version": "1.6.0",
   "description": "Офлайн создание приглашений",
   "author": "PriglosApp",
   "private": true,
@@ -8,7 +8,11 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
-    "build": "electron-builder --win portable --x64"
+    "build": "electron-builder --win portable --x64",
+    "build:win": "electron-builder --win portable --x64 --publish never",
+    "build:mac": "node scripts/build-mac.cjs arm64",
+    "build:mac:x64": "node scripts/build-mac.cjs x64",
+    "prepare:mac": "node scripts/prepare-mac.cjs"
   },
   "devDependencies": {
     "electron": "^38.0.0",
@@ -23,11 +27,21 @@
     },
     "files": [
       "src/**/*",
-      "assets/**/*",
+      "assets/template-config.js",
+      "assets/portal-template.png",
+      "assets/balloons-template.png",
+      "assets/designs/*_фон.png",
+      "assets/fonts/**/*",
+      "assets/balloon.png",
+      "assets/balloon.ico",
       "package.json"
     ],
+    "portable": {
+      "artifactName": "Конструктор приглашений.exe"
+    },
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "icon": "assets/balloon.ico"
     }
   }
 }

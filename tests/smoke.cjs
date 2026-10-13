@@ -1,61 +1,24 @@
-const { chromium } = require('playwright');
-const assert = require('node:assert/strict');
-const path = require('node:path');
-const http = require('node:http');
-const fs = require('node:fs/promises');
-(async () => {
- const root = path.resolve(__dirname, '..');
- const server = http.createServer(async(req,res)=>{try{const file=path.join(root,decodeURIComponent(req.url));const body=await fs.readFile(file);res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':'text/html');res.end(body);}catch{res.statusCode=404;res.end();}});
- await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
- let browser;
- try {
- browser = await chromium.launch({executablePath:process.env.CHROMIUM_PATH || undefined,headless:true,args:['--no-sandbox']});
- const page = await browser.newPage({viewport:{width:1200,height:900}}); const errors=[]; page.on('pageerror', e=>errors.push(e.message));
- await page.addInitScript(() => { window.desktop = {getTemplate:async()=>localStorage.getItem('template'),saveTemplate:async data=>localStorage.setItem('template',data),saveImage:async (data,format) => { window.saved={data,format}; return true; }}; });
- await page.goto(`http://127.0.0.1:${server.address().port}/src/index.html`);
- await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Выберите'));
- const template = await page.evaluate(()=>{const c=document.createElement('canvas');c.width=1080;c.height=1920;const ctx=c.getContext('2d');ctx.fillStyle='#100b20';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='#ff00ff';ctx.fillRect(178,1670,480,190);return c.toDataURL().split(',')[1];});
- await page.locator('#template').setInputFiles({name:'template.png',mimeType:'image/png',buffer:Buffer.from(template,'base64')});
- await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Шаблон сохранён'));
- const png = await page.evaluate(()=>{const c=document.createElement('canvas');c.width=600;c.height=1000;const x=c.getContext('2d');x.fillStyle='#dd8877';x.fillRect(0,0,600,1000);return c.toDataURL().split(',')[1];});
- await page.locator('#photo').setInputFiles({name:'photo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
- await page.locator('#name').fill('София'); await page.locator('#date').fill('2026-12-15'); await page.locator('#time').fill('14:30');
- await page.waitForFunction(()=>!document.getElementById('save').disabled);
- assert.equal(await page.locator('#venue option').count(),2);
- const addressImages=[];
- for (const venue of ['markos','konkovo']) {
-   await page.locator('#venue').selectOption(venue);
-   const crop=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=480;c.height=190;c.getContext('2d').drawImage(document.getElementById('canvas'),178,1670,480,190,0,0,480,190);return c.toDataURL().split(',')[1];});
-   addressImages.push(crop);
-   await fs.mkdir(path.join(root,'dist'),{recursive:true});
-   await fs.writeFile(path.join(root,'dist',`address-${venue}.png`),Buffer.from(crop,'base64'));
-   for(const format of ['png','jpg']) {
- await page.evaluate(()=>{window.saved=null;});
- await page.locator('#format').selectOption(format); await page.locator('#save').click();
- await page.waitForFunction(()=>document.getElementById('status').textContent.includes('сохранено'));
- const result=await page.evaluate(async()=>{const img=new Image();img.src=window.saved.data;await img.decode();return {width:img.width,height:img.height,format:window.saved.format,prefix:window.saved.data.slice(0,23)};});
- assert.equal(result.width,1080);assert.equal(result.height,1920);assert.equal(result.format,format);
- assert.ok(result.prefix.startsWith(format==='png'?'data:image/png':'data:image/jpeg'));
- }
- }
- assert.notEqual(addressImages[0],addressImages[1],'Changing venue must change the rendered address');
- const cover=await page.evaluate(()=>Array.from(document.getElementById('canvas').getContext('2d').getImageData(200,1680,1,1).data));
- assert.notDeepEqual(cover,[255,0,255,255],'Original baked address must be covered');
- const pixels=await page.evaluate(()=>{const ctx=document.getElementById('canvas').getContext('2d');return {inside:Array.from(ctx.getImageData(850,1500,1,1).data),outside:Array.from(ctx.getImageData(490,1230,1,1).data)};});
- assert.deepEqual(pixels.inside,[221,136,119,255]);assert.deepEqual(pixels.outside,[16,11,32,255]);
- await page.reload();await page.waitForFunction(()=>document.getElementById('canvas').width===1080);
- assert.equal(await page.locator('#resolution').textContent(),'1080 × 1920');
- const smallTemplate=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=540;c.height=960;const ctx=c.getContext('2d');ctx.fillStyle='#100b20';ctx.fillRect(0,0,c.width,c.height);return c.toDataURL().split(',')[1];});
- await page.locator('#template').setInputFiles({name:'small.png',mimeType:'image/png',buffer:Buffer.from(smallTemplate,'base64')});
- await page.waitForFunction(()=>document.getElementById('canvas').width===540);
- await page.locator('#photo').setInputFiles({name:'photo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
- await page.locator('#name').fill('Всеволода');await page.locator('#date').fill('2026-10-21');await page.locator('#time').fill('16:00');
- await page.waitForFunction(()=>!document.getElementById('save').disabled);await page.locator('#save').click();
- await page.waitForFunction(()=>document.getElementById('status').textContent.includes('сохранено'));
- const scaled=await page.evaluate(async()=>{const img=new Image();img.src=window.saved.data;await img.decode();return {width:img.width,height:img.height,pixel:Array.from(document.getElementById('canvas').getContext('2d').getImageData(425,750,1,1).data)};});
- assert.equal(scaled.width,540);assert.equal(scaled.height,960);assert.deepEqual(scaled.pixel,[221,136,119,255]);
- await fs.mkdir(path.join(root,'dist'),{recursive:true});
- await page.screenshot({path:path.join(root,'dist','preview.png')});
- assert.deepEqual(errors,[]); console.log('PASS: both selectable addresses, address replacement, local template persistence, tilted photo clipping, PNG/JPG at original 1080 × 1920 and scaled 540 × 960');
- } finally {if(browser) await browser.close();server.close();}
-})().catch(e=>{console.error(e);process.exitCode=1;});
+const {chromium}=require('playwright'),assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs/promises'),path=require('node:path');
+(async()=>{const root=path.resolve(__dirname,'..');const server=http.createServer(async(req,res)=>{try{const file=path.join(root,decodeURIComponent(req.url));res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.png')?'image/png':'text/html');res.end(await fs.readFile(file));}catch{res.statusCode=404;res.end();}});await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+try{browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,headless:true});const page=await browser.newPage({viewport:{width:1040,height:700}});const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(defaults=>{window.desktop={saveImage:async(data,filename)=>{window.saved={data,filename};return true;},getSettings:async()=>({settings:{schemaVersion:1,locations:JSON.parse(localStorage.getItem("locations")||JSON.stringify(defaults))},path:"test/settings.json"}),saveLocations:async locations=>{localStorage.setItem("locations",JSON.stringify(locations));return {schemaVersion:1,locations};},confirmLocationDelete:async()=>{window.deleteConfirmations=(window.deleteConfirmations||0)+1;return true;}};},require("../src/settings-store.cjs").DEFAULT_LOCATIONS);await page.goto('http://127.0.0.1:'+server.address().port+'/src/index.html');await page.waitForFunction(()=>document.getElementById('resolution').textContent==='941 × 1672');
+assert.equal(await page.locator('#template,#format,#time').count(),0);assert.deepEqual(await page.locator('#venue option').allTextContents(),['м. Коньково','м. Алтуфьево']);assert.equal(await page.locator('#save').isDisabled(),true);
+for(const [width,height]of [[1040,700],[850,640],[1040,900]]){await page.setViewportSize({width,height});await page.waitForTimeout(60);const layout=await page.evaluate(()=>{const c=document.getElementById('canvas').getBoundingClientRect(),s=document.getElementById('status').getBoundingClientRect();return {overflow:document.documentElement.scrollHeight>innerHeight,ratio:c.width/c.height,bottom:s.bottom,previewBottom:document.querySelector('.preview').getBoundingClientRect().bottom};});assert.equal(layout.overflow,false);assert.ok(layout.bottom<=height);assert.ok(layout.previewBottom<=height);assert.ok(Math.abs(layout.ratio-941/1672)<.001);}
+await page.setViewportSize({width:1040,height:700});
+await fs.mkdir(path.join(root,"dist"),{recursive:true});await page.screenshot({path:path.join(root,"dist","portal-placeholder.png")});
+const originalPixels=await page.evaluate(()=>{const c=document.getElementById("canvas"),ctx=c.getContext("2d");return [[130,750],[160,1020],[472,1060],[800,750]].map(([x,y])=>Array.from(ctx.getImageData(x,y,1,1).data));});
+const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=600;c.height=1000;const x=c.getContext('2d');x.fillStyle='#d87';x.fillRect(0,0,600,1000);x.fillStyle='#057';x.fillRect(0,0,300,1000);return c.toDataURL().split(',')[1];});
+await page.locator('#photo').setInputFiles({name:'photo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});await page.locator('#name').fill('Михаил');await page.locator('#date').fill('2026-10-20');await page.locator('#hour').selectOption('19');await page.locator('#minute').selectOption('00');await page.waitForFunction(()=>!document.getElementById('save').disabled);
+await page.locator('#hour').selectOption('23');assert.deepEqual(await page.locator('#minute option').allTextContents(),['00']);await page.locator('#hour').selectOption('19');assert.equal(await page.locator('#minute option').count(),12);
+await page.evaluate(()=>{window.drawnTexts=[];const original=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(text,...args){window.drawnTexts.push(text);return original.call(this,text,...args);};});
+for(const [name,date,expected,text] of [["МИХАИЛА","2026-10-16","Михаила","16 октября"],["олега","2026-11-15","Олега","15 ноября"],["Софии","2026-12-07","Софии","7 декабря"],["АННЫ","2027-03-08","Анны","8 марта"]]){await page.evaluate(()=>{window.drawnTexts=[];});await page.locator("#name").fill(name);await page.locator("#date").fill(date);const drawn=await page.evaluate(()=>window.drawnTexts);assert.ok(drawn.includes(expected));assert.ok(drawn.includes(text));assert.equal(await page.locator("#filename").textContent(),"ДР_"+expected+"_"+text+"_19-00.jpg");}
+await page.locator("#name").fill("Александра-константина");await page.screenshot({path:path.join(root,"dist","portal-long-name.png")});await page.locator("#name").fill("Михаила");await page.locator("#date").fill("2026-10-20");
+const before=await page.locator('#canvas').evaluate(c=>c.toDataURL());await page.locator('#zoom-in').click();await page.locator('#zoom-in').click();
+await page.locator("#rotation").fill("14");assert.equal(await page.locator("#angle-value").textContent(),"+14°");
+const spot=await page.evaluate(()=>{const c=document.getElementById('canvas').getBoundingClientRect();return {x:c.left+472/941*c.width,y:c.top+750/1672*c.height};});
+await page.mouse.move(spot.x,spot.y);await page.mouse.down();await page.mouse.move(spot.x+20,spot.y-15);await page.mouse.up();await page.mouse.wheel(0,-120);await page.waitForTimeout(100);assert.notEqual(await page.locator('#canvas').evaluate(c=>c.toDataURL()),before);
+const rotated=await page.locator("#canvas").evaluate(c=>c.toDataURL());await page.locator("#reset-angle").click();assert.equal(await page.locator("#angle-value").textContent(),"0°");assert.notEqual(await page.locator("#canvas").evaluate(c=>c.toDataURL()),rotated);await page.locator("#rotation").fill("-8");assert.equal(await page.locator("#angle-value").textContent(),"-8°");
+const foreground=await page.evaluate(()=>{const ctx=document.getElementById("canvas").getContext("2d");return [[130,750],[160,1020],[472,1060],[800,750]].map(([x,y])=>Array.from(ctx.getImageData(x,y,1,1).data));});assert.deepEqual(foreground,originalPixels,"rim, foreground and outside circle must remain unchanged");
+await page.evaluate(()=>{const c=document.getElementById('canvas');window.priorPixels=c.getContext('2d').getImageData(0,0,c.width,c.height).data;});const edited=await page.locator('#canvas').evaluate(c=>c.toDataURL('image/jpeg',.97));await page.locator('#save').click();await page.waitForFunction(()=>window.saved);const saved=await page.evaluate(async()=>{const img=new Image();img.src=window.saved.data;await img.decode();return {...window.saved,width:img.width,height:img.height};});assert.ok(saved.data===edited,'JPEG differs from preview canvas');assert.equal(saved.filename,'ДР_Михаила_20 октября_19-00.jpg');assert.equal(saved.width,941);assert.equal(saved.height,1672);assert.ok(saved.data.startsWith('data:image/jpeg'));
+await page.locator('#venue').selectOption('markos');assert.notEqual(await page.locator('#canvas').evaluate(c=>c.toDataURL('image/jpeg',.97)),edited);await page.screenshot({path:path.join(root,"dist","portal-altufyevo.png")});await page.locator('#reset-photo').click();await page.locator('#venue').selectOption('konkovo');assert.ok(await page.locator('#canvas').evaluate(c=>c.toDataURL())===before,'Reset should restore initial rendering');
+await fs.mkdir(path.join(root,'dist'),{recursive:true});await page.locator("#rotation").fill("14");await page.screenshot({path:path.join(root,"dist","preview-1.3.png")});await fs.writeFile(path.join(root,"dist","portal-example.jpg"),Buffer.from(await page.locator("#canvas").evaluate(c=>c.toDataURL("image/jpeg",.97).split(",")[1]),"base64"));assert.deepEqual(errors,[]);console.log('PASS: embedded template, no overflow at minimum/default window, bounded time, drag/zoom/reset, JPEG matches preview at 941x1672, filename, locations');
+}finally{if(browser)await browser.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
