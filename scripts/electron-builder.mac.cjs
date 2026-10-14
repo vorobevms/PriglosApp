@@ -7,6 +7,8 @@ module.exports = {
   directories: {...shared.directories, output: 'release-mac'},
   mac: {
     target: 'dmg',
+    // Match macOS filesystem normalization when Electron validates helper paths.
+    extendInfo: {CFBundleName: 'Конструктор приглашений'.normalize('NFD')},
     icon: 'assets/balloon.icns',
     category: 'public.app-category.graphics-design',
     minimumSystemVersion: '12.0.0',
